@@ -1,0 +1,21 @@
+<configuration>
+
+  <!-- Default filesystem -->
+  <property>
+    <name>fs.defaultFS</name>
+    <value>hdfs://namenode:9000</value>
+  </property>
+
+  <!-- Required for Docker DNS -->
+  <property>
+    <name>hadoop.tmp.dir</name>
+    <value>/tmp/hadoop</value>
+  </property>
+
+  <!-- Disable permission issues in dev -->
+  <property>
+    <name>hadoop.security.authentication</name>
+    <value>simple</value>
+  </property>
+
+</configuration>

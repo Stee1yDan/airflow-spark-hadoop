@@ -1,0 +1,154 @@
+version: "3.8"
+
+networks:
+  hadoop-net:
+    driver: bridge
+
+volumes:
+  namenode-data:
+  datanode-data:
+  airflow-logs:
+  postgres-data:
+  spark-spark-home:
+
+
+services:
+  namenode:
+    build: ./hadoop
+    hostname: namenode
+    container_name: namenode
+    command: hdfs namenode
+    networks:
+      - hadoop-net
+    ports:
+      - "9870:9870"   # HDFS Web UI
+    environment:
+      - HDFS_NAMENODE_USER=root
+    volumes:
+      - namenode-data:/data/hdfs/namenode
+
+  datanode:
+    build: ./hadoop
+    hostname: datanode
+    container_name: datanode
+    command: hdfs datanode
+    depends_on:
+      - namenode
+    networks:
+      - hadoop-net
+    environment:
+      - HDFS_DATANODE_USER=root
+    volumes:
+      - datanode-data:/data/hdfs/datanode
+
+  resourcemanager:
+    build: ./hadoop
+    hostname: resourcemanager
+    container_name: resourcemanager
+    command: yarn resourcemanager
+    networks:
+      - hadoop-net
+    ports:
+      - "8088:8088"   # YARN Web UI
+    environment:
+      - YARN_RESOURCEMANAGER_USER=root
+
+  nodemanager:
+    build: ./hadoop
+    hostname: nodemanager
+    container_name: nodemanager
+    command: yarn nodemanager
+    depends_on:
+      - resourcemanager
+    networks:
+      - hadoop-net
+    environment:
+      - YARN_NODEMANAGER_USER=root
+
+  spark:
+    build: ./spark
+    container_name: spark
+    networks:
+      - hadoop-net
+    depends_on:
+      - resourcemanager
+      - nodemanager
+    environment:
+      - SPARK_MASTER_HOST=resourcemanager
+      - HADOOP_CONF_DIR=/opt/hadoop/etc/hadoop
+      - SPARK_HOME=/opt/spark
+      - YARN_CONF_DIR=/opt/hadoop/etc/hadoop
+    volumes:
+      - ./jobs:/jobs
+
+  ml-python:
+    build: ./python
+    container_name: ml-python
+    networks:
+      - hadoop-net
+    working_dir: /app
+    command: sleep infinity
+    environment:
+      - HADOOP_CONF_DIR=/opt/hadoop/etc/hadoop
+      - YARN_CONF_DIR=/opt/hadoop/etc/hadoop
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./jobs:/app/jobs
+      - ./data:/app/data
+      - ./hadoop/conf:/opt/hadoop/etc/hadoop
+
+
+
+  airflow:
+    build: ./airflow
+    container_name: airflow
+    networks:
+      - hadoop-net
+    ports:
+      - "8080:8080"   # Airflow Web UI
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__FERNET_KEY=YOUR_FERNET_KEY
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=False
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - HADOOP_CONF_DIR=/opt/hadoop/etc/hadoop
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      - AIRFLOW__CORE__FERNET_KEY=y9nZQ3t5P4pQpL5UZzXxQ2JwR4F1M5C0LkK4jv7b6vI=
+      #- YARN_CONF_DIR=/opt/hadoop/etc/hadoop
+      #- SPARK_HOME=/opt/spark
+      #- SPARK_MASTER_HOST=resourcemanager
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./airflow/dags:/opt/airflow/dags
+      - airflow-logs:/opt/airflow/logs
+      - spark-spark-home:/opt/spark   # mount Spark binaries
+      - ./jobs:/jobs
+      - ./hadoop/conf:/opt/hadoop/etc/hadoop
+    command: >
+      bash -c "
+        airflow db init &&
+        airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin
+        airflow webserver &
+        airflow scheduler
+      "
+    depends_on:
+      - spark
+      - namenode
+      - datanode
+      - resourcemanager
+      - nodemanager
+      - postgres
+
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - hadoop-net

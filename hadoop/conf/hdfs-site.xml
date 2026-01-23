@@ -1,0 +1,27 @@
+<configuration>
+
+  <!-- Replication factor -->
+  <property>
+    <name>dfs.replication</name>
+    <value>1</value>
+  </property>
+
+  <!-- NameNode metadata -->
+  <property>
+    <name>dfs.namenode.name.dir</name>
+    <value>file:///data/hdfs/namenode</value>
+  </property>
+
+  <!-- DataNode blocks -->
+  <property>
+    <name>dfs.datanode.data.dir</name>
+    <value>file:///data/hdfs/datanode</value>
+  </property>
+
+  <!-- Allow container-to-container access -->
+  <property>
+    <name>dfs.permissions.enabled</name>
+    <value>false</value>
+  </property>
+
+</configuration>
