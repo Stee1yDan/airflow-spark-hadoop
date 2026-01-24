@@ -5,7 +5,7 @@ from datetime import datetime
 
 dag = DAG(
     dag_id="spark_on_yarn",
-    start_date=datetime(2024, 1, 1),
+    start_date=datetime(2026, 1, 1),
     schedule_interval=None,
     catchup=False,
 )

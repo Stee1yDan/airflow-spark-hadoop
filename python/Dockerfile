@@ -18,6 +18,22 @@ RUN pip install --no-cache-dir \
     matplotlib \
     hdfs
 
+RUN pip install --no-cache-dir \
+    matplotlib \
+    hdfs
+
+RUN pip install --no-cache-dir \
+    scikit-learn
+
+RUN pip install --no-cache-dir \
+    scikit-image
+
+RUN pip install --no-cache-dir \
+    pathlib
+
+RUN pip install --no-cache-dir \
+    reportlab
+
 WORKDIR /app
 
 COPY test_runner.py /app/jobs/

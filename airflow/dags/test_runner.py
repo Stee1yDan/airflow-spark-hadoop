@@ -6,13 +6,13 @@ from datetime import datetime
 
 
 dag = DAG(
-    dag_id="gradient_inversion_dag",
-    start_date=datetime(2024, 1, 1),
+    dag_id="test_runner",
+    start_date=datetime(2026, 1, 1),
     schedule_interval=None,
     catchup=False,
 )
 
-gradient_inversion = DockerOperator(
+run_test = DockerOperator(
     task_id="ml_job",
     image="ash-ml-python:latest",
     command="python /app/jobs/test_runner.py gradient_inversion.py",
@@ -36,4 +36,4 @@ end = PythonOperator(
     dag=dag
 )
 
-start >> gradient_inversion >> end
+start >> run_test >> end
