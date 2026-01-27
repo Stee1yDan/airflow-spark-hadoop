@@ -1,6 +1,7 @@
 # !pip install torchvision matplotlib
 
 import torch
+import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
@@ -68,14 +69,27 @@ def run():
         if i % 50 == 0:
             history.append(dummy_data.detach().clone())
 
-    # ===== Step 5: Visualize reconstruction =====
-    fig, axes = plt.subplots(1, len(history) + 1, figsize=(10, 3))
-    axes[0].imshow(images[0].squeeze(), cmap='gray')
-    axes[0].set_title("Original")
-    axes[0].axis('off')
+    # ===== Step 5: Metrics =====
+    orig = images[0, 0].detach().cpu().numpy()
+    recon = dummy_data[0, 0].detach().cpu().numpy()
 
-    for idx, img in enumerate(history):
-        axes[idx + 1].imshow(img[0].squeeze(), cmap='gray')
-        axes[idx + 1].set_title(f"Iter {idx * 50}")
-        axes[idx + 1].axis('off')
+    mse = float(np.mean((orig - recon) ** 2))
+    cos_sim = float(
+        cosine_similarity(orig.reshape(1, -1), recon.reshape(1, -1))[0][0]
+    )
+    ssim_score = float(
+        ssim(orig, recon, data_range=recon.max() - recon.min())
+    )
 
+    attribute_accuracy = int(torch.argmax(model(dummy_data)).item() == labels.item())
+
+    metrics = {
+        "mse": mse,
+        "cosine_similarity": cos_sim,
+        "ssim": ssim_score,
+        "attribute_accuracy": attribute_accuracy,
+    }
+
+    return {
+        "metrics": metrics
+    }

@@ -34,6 +34,11 @@ RUN pip install --no-cache-dir \
 RUN pip install --no-cache-dir \
     reportlab
 
+RUN pip install --no-cache-dir \
+    numpy
+
+
 WORKDIR /app
 
 COPY test_runner.py /app/jobs/
+COPY generate_report.py /app/jobs/

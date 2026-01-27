@@ -13,13 +13,28 @@ dag = DAG(
 )
 
 run_test = DockerOperator(
-    task_id="ml_job",
+    task_id="run_test",
     image="ash-ml-python:latest",
     command="python /app/jobs/test_runner.py gradient_inversion.py",
     network_mode="ash_hadoop-net",
     dag = dag,
     auto_remove=True,
     docker_url="unix://var/run/docker.sock",
+    do_xcom_push=True,
+    mount_tmp_dir=False
+)
+
+generate_report = DockerOperator(
+    task_id="generate_report",
+    image="ash-ml-python:latest",
+    command="python /app/jobs/generate_report.py",
+    network_mode="ash_hadoop-net",
+    dag = dag,
+    auto_remove=True,
+    docker_url="unix://var/run/docker.sock",
+    environment={
+        "TEST_RESULT_JSON": "{{ ti.xcom_pull(task_ids='run_test') | tojson }}"
+    },
     mount_tmp_dir=False
 )
 
@@ -36,4 +51,4 @@ end = PythonOperator(
     dag=dag
 )
 
-start >> run_test >> end
+start >> run_test >> generate_report >> end
