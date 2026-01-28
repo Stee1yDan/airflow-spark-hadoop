@@ -178,8 +178,8 @@ xcom_path = Path("/airflow/xcom/return.json")
 xcom_path.parent.mkdir(parents=True, exist_ok=True)
 
 payload = {
-    "metrics_hdfs_path": "/ml/results/gradient_inversion/metrics.json",
-    "images_hdfs_dir": "/ml/results/gradient_inversion/images",
+    "metrics_hdfs_path": f"/ml/results/gradient_inversion/{run_id}/metrics.json",
+    "images_hdfs_dir": f"/ml/results/gradient_inversion/{run_id}/images",
     "report_id": "gradient_inversion_2026-01-27"
 }
 

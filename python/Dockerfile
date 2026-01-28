@@ -42,3 +42,4 @@ WORKDIR /app
 
 COPY test_runner.py /app/jobs/
 COPY generate_report.py /app/jobs/
+COPY fonts /fonts
