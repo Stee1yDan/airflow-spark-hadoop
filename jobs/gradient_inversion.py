@@ -77,8 +77,10 @@ def run():
     cos_sim = float(
         cosine_similarity(orig.reshape(1, -1), recon.reshape(1, -1))[0][0]
     )
-    ssim_score = float(
-        ssim(orig, recon, data_range=recon.max() - recon.min())
+    ssim_score = ssim(
+        orig,
+        recon,
+        data_range=orig.max() - recon.min()
     )
 
     attribute_accuracy = int(torch.argmax(model(dummy_data)).item() == labels.item())
