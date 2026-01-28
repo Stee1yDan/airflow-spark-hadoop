@@ -152,3 +152,20 @@ services:
       - postgres-data:/var/lib/postgresql/data
     networks:
       - hadoop-net
+
+  hue:
+    image: gethue/hue:4.11.0
+    container_name: hue
+    hostname: hue
+    networks:
+      - hadoop-net
+    ports:
+      - "8888:8888"   # Hue Web UI
+    depends_on:
+      - namenode
+      - resourcemanager
+    environment:
+      - HUE_CONF_DIR=/usr/share/hue/desktop/conf
+    volumes:
+      - ./hue/hue.ini:/usr/share/hue/desktop/conf/hue.ini
+
