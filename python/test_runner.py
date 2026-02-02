@@ -199,7 +199,7 @@ xcom_path.parent.mkdir(parents=True, exist_ok=True)
 
 payload = {
     "metrics_hdfs_path": f"/ml/results/gradient_inversion/{run_id}/metrics.json",
-    "images_hdfs_dir": f"/ml/results/gradient_inversion/{run_id}/images",
+    "images_hdfs_dir": f"/ml/results/gradient_inversion/{run_id}/artifacts",
     "report_id": "gradient_inversion_2026-01-27"
 }
 

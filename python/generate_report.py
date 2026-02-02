@@ -51,6 +51,8 @@ hdfs_url = "http://namenode:9870"
 logger.info("Connecting to HDFS: %s", hdfs_url)
 client = InsecureClient(hdfs_url, user="hdfs")
 
+
+
 # -------------------------------------------------------------------
 # Download and parse metrics
 # -------------------------------------------------------------------
@@ -90,6 +92,55 @@ except Exception as e:
     # Use the result dict as fallback
     metrics = result
     logger.info("Using input JSON as fallback metrics")
+
+# -------------------------------------------------------------------
+# Download images from HDFS directory
+# -------------------------------------------------------------------
+local_images_dir = temp_dir / "images"
+local_images_dir.mkdir(parents=True, exist_ok=True)
+
+downloaded_images = []
+
+if images_hdfs_dir:
+    logger.info("Listing images in HDFS dir: %s", images_hdfs_dir)
+
+    try:
+        hdfs_files = client.list(images_hdfs_dir, status=True)
+
+        for fname, status in hdfs_files:
+            if status["type"] != "FILE":
+                continue
+
+            if not fname.lower().endswith((".png", ".jpg", ".jpeg")):
+                continue
+
+            hdfs_img_path = f"{images_hdfs_dir}/{fname}"
+            local_img_path = local_images_dir / fname
+
+            logger.info(
+                "Downloading image from HDFS: %s → %s",
+                hdfs_img_path,
+                local_img_path,
+            )
+
+            client.download(
+                hdfs_img_path,
+                str(local_img_path),
+                overwrite=True,
+            )
+
+            downloaded_images.append((local_img_path, fname))
+
+        logger.info(
+            "Downloaded %d image(s) from HDFS",
+            len(downloaded_images),
+        )
+
+    except Exception as e:
+        logger.error("Failed to download images from HDFS: %s", e)
+
+else:
+    logger.warning("No images_hdfs_dir provided in XCOM result")
 
 # -------------------------------------------------------------------
 # Report Generate
@@ -216,16 +267,39 @@ def generate_pdf_report(metrics_data, output_path):
     elements.append(metrics_table)
     elements.append(Spacer(1, 18))
 
-    # ===== Reconstruction section =====
-    elements.append(Paragraph("Результаты реконструкции", heading_style))
-    elements.append(Spacer(1, 12))
+    elements.append(
+        Paragraph("Изображения", heading_style)
+    )
 
-    # Add information about images if available
-    if images_hdfs_dir:
-        elements.append(
-            Paragraph(f"Восстановленные изображения сохранены в: {images_hdfs_dir}", normal_style)
+    for image, image_name in downloaded_images:
+
+        elements.append(Spacer(1, 12))
+
+        img_table = Table(
+            [
+                [
+                    RLImage(image, width=5 * cm, height=5 * cm)
+                ],
+                [
+                    Paragraph(str(image_name), table_cell_style)
+                ],
+            ],
+            colWidths=[7 * cm, 7 * cm],
         )
-    elements.append(Spacer(1, 12))
+
+        img_table.setStyle(
+            TableStyle(
+                [
+                    ("ALIGN", (0, 0), (-1, 0), "CENTER"),
+                    ("ALIGN", (0, 1), (-1, 1), "CENTER"),
+                    ("TOPPADDING", (0, 0), (-1, -1), 8),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                ]
+            )
+        )
+
+        elements.append(img_table)
+        elements.append(Spacer(1, 18))
 
     # ===== Conclusion =====
     elements.append(
