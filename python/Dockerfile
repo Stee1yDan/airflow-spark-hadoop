@@ -37,6 +37,9 @@ RUN pip install --no-cache-dir \
 RUN pip install --no-cache-dir \
     numpy
 
+RUN pip install --no-cache-dir \
+    pillow
+
 
 WORKDIR /app
 

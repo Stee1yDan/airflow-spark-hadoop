@@ -70,8 +70,9 @@ def run():
             history.append(dummy_data.detach().clone())
 
     # ===== Step 5: Metrics =====
-    orig = images[0, 0].detach().cpu().numpy()
-    recon = dummy_data[0, 0].detach().cpu().numpy()
+
+    orig = images.detach().cpu().numpy()[0, 0]
+    recon = dummy_data.detach().cpu().numpy()[0, 0]
 
     mse = float(np.mean((orig - recon) ** 2))
     cos_sim = float(
@@ -85,6 +86,10 @@ def run():
 
     attribute_accuracy = int(torch.argmax(model(dummy_data)).item() == labels.item())
 
+    orig_np = np.array(orig, dtype=np.float32)
+    recon_np = np.array(recon, dtype=np.float32)
+
+
     metrics = {
         "mse": mse,
         "cosine_similarity": cos_sim,
@@ -92,6 +97,10 @@ def run():
         "attribute_accuracy": attribute_accuracy,
     }
 
-    return {
-        "metrics": metrics
+    artifacts = {
+        "original": orig_np,
+        "reconstruction": recon_np
     }
+
+
+    return {"metrics": metrics, "artifacts": artifacts}

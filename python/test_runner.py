@@ -3,10 +3,12 @@ import logging
 from pathlib import Path
 import importlib.util
 from hdfs import InsecureClient
+import numpy as np
 
 from dataclasses import dataclass
 from typing import Any, Dict
 from pathlib import Path
+from PIL import Image
 
 @dataclass
 class TestContext:
@@ -150,18 +152,36 @@ logger.info("Metrics saved to HDFS")
 # -------------------------
 # Save artifacts (images)
 # -------------------------
-for name, local_path in result.get("artifacts", {}).items():
-    local_path = Path(local_path)
+for name, image in result.get("artifacts", {}).items():
 
-    if not local_path.exists():
-        logger.warning("Artifact not found: %s", local_path)
+    hdfs_target = f"{hdfs_base}/artifacts/{name}.png"
+    img_local_path = Path(f"/tmp/{name}.png")
+
+    if not isinstance(image, np.ndarray):
+        logger.warning("Artifact '%s' is not a numpy array, skipping.", name)
         continue
 
-    hdfs_target = f"{hdfs_base}/artifacts/{name}"
+    if np.isnan(image).any():
+        logger.warning("NaNs found in original or reconstructed images; replacing with 0")
+        image = np.nan_to_num(image, nan=0.0)
+
+    if isinstance(image, np.ndarray):
+        img_local_path = Path(f"/tmp/{name}.png")
+
+        # Normalize to 0-255 dynamically
+        min_val, max_val = image.min(), image.max()
+        if min_val == max_val:
+            image_uint8 = np.zeros_like(image, dtype=np.uint8)
+        else:
+            image_uint8 = ((image - min_val) / (max_val - min_val) * 255).astype(np.uint8)
+
+        im = Image.fromarray(image_uint8)
+        im.save(img_local_path)
+
 
     client.upload(
         hdfs_target,
-        str(local_path),
+        str(img_local_path),
         overwrite=True,
     )
 

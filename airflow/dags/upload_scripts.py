@@ -4,6 +4,11 @@ from airflow.operators.python import PythonOperator
 from datetime import datetime
 from hdfs import InsecureClient
 import os
+import sys
+
+TMP_DIR = "/tmp"
+if TMP_DIR not in sys.path:
+    sys.path.insert(0, TMP_DIR)
 
 HDFS_URL = "http://namenode:9870"
 LOCAL_JOBS_DIR = "/jobs"
@@ -11,13 +16,32 @@ HDFS_SCRIPTS_DIR = "/ml/scripts"
 
 def upload_scripts():
     client = InsecureClient(HDFS_URL, user="hdfs")
+
+    # Ensure base directory exists
     client.makedirs(HDFS_SCRIPTS_DIR)
 
-    for f in os.listdir(LOCAL_JOBS_DIR):
-        if f.endswith(".py"):
-            local_path = os.path.join(LOCAL_JOBS_DIR, f)
-            hdfs_path = f"{HDFS_SCRIPTS_DIR}/{f}"
-            client.upload(hdfs_path, local_path, overwrite=True)
+    for root, dirs, files in os.walk(LOCAL_JOBS_DIR):
+        for file in files:
+            if not file.endswith(".py"):
+                continue
+
+            local_path = os.path.join(root, file)
+
+            # preserve relative path
+            rel_path = os.path.relpath(local_path, LOCAL_JOBS_DIR)
+            hdfs_path = os.path.join(HDFS_SCRIPTS_DIR, rel_path)
+
+            # ensure HDFS subdir exists
+            hdfs_dir = os.path.dirname(hdfs_path)
+            client.makedirs(hdfs_dir)
+
+            client.upload(
+                hdfs_path,
+                local_path,
+                overwrite=True
+            )
+
+            print(f"Uploaded: {rel_path}")
 
 dag = DAG(
     dag_id="upload_scripts",
