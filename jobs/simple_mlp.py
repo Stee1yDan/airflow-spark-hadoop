@@ -9,23 +9,26 @@ import matplotlib.pyplot as plt
 from skimage.metrics import structural_similarity as ssim
 from sklearn.metrics.pairwise import cosine_similarity
 
-def run():
+
+# ===== Step 2: Define a simple model =====
+class SimpleMLP(nn.Module):
+    def __init__(self):
+        super(SimpleMLP, self).__init__()
+        self.fc1 = nn.Linear(28 * 28, 128)
+        self.fc2 = nn.Linear(128, 10)
+
+    def forward(self, x):
+        x = x.view(-1, 28 * 28)
+        x = F.relu(self.fc1(x))
+        return self.fc2(x)
+
+
+def train():
     # ===== Step 1: Prepare MNIST dataset =====
     transform = transforms.Compose([transforms.ToTensor()])
     trainset = datasets.MNIST(root='./data', train=True, download=True, transform=transform)
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=1, shuffle=True)
 
-    # ===== Step 2: Define a simple model =====
-    class SimpleMLP(nn.Module):
-        def __init__(self):
-            super(SimpleMLP, self).__init__()
-            self.fc1 = nn.Linear(28 * 28, 128)
-            self.fc2 = nn.Linear(128, 10)
-
-        def forward(self, x):
-            x = x.view(-1, 28 * 28)
-            x = F.relu(self.fc1(x))
-            return self.fc2(x)
 
     model = SimpleMLP()
 
@@ -39,7 +42,8 @@ def run():
     loss.backward()
 
     result = {
-        "model": model
+        "model": model,
+        "model_name": "SimpleMLP",
     }
 
     return result
