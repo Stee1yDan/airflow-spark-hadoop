@@ -40,9 +40,13 @@ RUN pip install --no-cache-dir \
 RUN pip install --no-cache-dir \
     pillow
 
+RUN pip install --no-cache-dir \
+    joblib
+
 
 WORKDIR /app
 
+COPY model_trainer.py /app/jobs/
 COPY test_runner.py /app/jobs/
 COPY generate_report.py /app/jobs/
 COPY fonts /fonts

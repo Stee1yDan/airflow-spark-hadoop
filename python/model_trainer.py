@@ -4,16 +4,18 @@ from pathlib import Path
 import importlib.util
 from hdfs import InsecureClient
 import numpy as np
+import torch
 
 from dataclasses import dataclass
 from typing import Any, Dict
 from pathlib import Path
 from PIL import Image
+import joblib
 
 @dataclass
 class TestContext:
     model: Any | None
-    artifacts_dir: Path
+    models_dir: Path
     metadata: Dict[str, Any]
 
 # -------------------------------------------------------------------
@@ -28,11 +30,12 @@ logger = logging.getLogger("test_runner")
 # -------------------------------------------------------------------
 # Prepare execution context
 # -------------------------------------------------------------------
-artifacts_dir = Path("/tmp/artifacts")
-artifacts_dir.mkdir(parents=True, exist_ok=True)
+models_dir = Path("/tmp/models")
+models_dir.mkdir(parents=True, exist_ok=True)
 
 logger.info("Execution context prepared")
-logger.info("Artifacts dir: %s", artifacts_dir)
+logger.info("Artifacts dir: %s", models_dir)
+
 
 # -------------------------------------------------------------------
 # Input validation
@@ -82,119 +85,63 @@ logger.info("Module loaded: %s", test_module.__name__)
 # -------------------------------------------------------------------
 # Contract check
 # -------------------------------------------------------------------
-if not hasattr(test_module, "run"):
-    logger.error("Test module does not define run()")
-    raise RuntimeError("Test must define run()")
+if not hasattr(test_module, "train"):
+    logger.error("Test module does not define train()")
+    raise RuntimeError("Test must define train()")
 
-logger.info("run() function found, executing test")
+logger.info("train() function found, executing test")
 
 # -------------------------------------------------------------------
 # Execute test
 # -------------------------------------------------------------------
 try:
-    result = test_module.run()
-    logger.info("Test execution completed successfully")
+    result = test_module.train()
+    logger.info("Script execution completed successfully")
 except Exception as e:
-    logger.exception("Test execution failed")
+    logger.exception("Script execution failed")
     raise
 
 # -------------------------------------------------------------------
 # Result handling
 # -------------------------------------------------------------------
 if result is None:
-    logger.warning("Test returned None")
+    logger.warning("Script returned None")
 else:
-    logger.info("Test returned result of type: %s", type(result))
-    logger.debug("Test result content: %s", result)
+    logger.info("Script returned result of type: %s", type(result))
+    logger.debug("Script result content: %s", result)
 
-logger.info("Test runner finished")
+logger.info("Model trainer finished")
 
 # -------------------------
 # Handling the result
 # -------------------------
 
-import json
-from datetime import datetime
+model = result.get("model")
+model_name = result.get("model_name")
+hdfs_model_path = f"/ml/models/{script_name}"
 
-run_id = datetime.utcnow().isoformat().replace(":", "-")
-hdfs_base = f"/ml/results/{script_name.replace('.py', '')}/{run_id}"
+if model is not None:
 
-logger.info("Saving results to HDFS: %s", hdfs_base)
+    local_model_path = models_dir / "model.pt"
+    hdfs_model_path = f"{hdfs_model_path}/{str(model_name)}.pt"
 
-# Ensure directories
-client.makedirs(f"{hdfs_base}/artifacts")
+    torch.save(model.state_dict(), local_model_path)
+
+    client.upload(
+        hdfs_model_path,
+        str(local_model_path),
+        overwrite=True,
+    )
+
+    logger.info("Model successfully saved to HDFS")
+else:
+    logger.warning("No model returned, skipping model save")
+
 
 # -------------------------
 # Save metrics
 # -------------------------
-metrics_path = artifacts_dir / "metrics.json"
-
-with metrics_path.open("w") as f:
-    json.dump(result.get("metrics", {}), f, indent=2)
-
-client.upload(
-    f"{hdfs_base}/metrics.json",
-    str(metrics_path),
-    overwrite=True,
-)
-
-logger.info("Metrics saved to HDFS")
 
 # -------------------------
 # Save artifacts (images)
 # -------------------------
-for name, image in result.get("artifacts", {}).items():
-
-    hdfs_target = f"{hdfs_base}/artifacts/{name}.png"
-    img_local_path = Path(f"/tmp/{name}.png")
-
-    if not isinstance(image, np.ndarray):
-        logger.warning("Artifact '%s' is not a numpy array, skipping.", name)
-        continue
-
-    if np.isnan(image).any():
-        logger.warning("NaNs found in original or reconstructed images; replacing with 0")
-        image = np.nan_to_num(image, nan=0.0)
-
-    if isinstance(image, np.ndarray):
-        img_local_path = Path(f"/tmp/{name}.png")
-
-        # Normalize to 0-255 dynamically
-        min_val, max_val = image.min(), image.max()
-        if min_val == max_val:
-            image_uint8 = np.zeros_like(image, dtype=np.uint8)
-        else:
-            image_uint8 = ((image - min_val) / (max_val - min_val) * 255).astype(np.uint8)
-
-        im = Image.fromarray(image_uint8)
-        im.save(img_local_path)
-
-
-    client.upload(
-        hdfs_target,
-        str(img_local_path),
-        overwrite=True,
-    )
-
-    logger.info("Uploaded artifact: %s", hdfs_target)
-
-# -------------------------
-# Sharing image
-# -------------------------
-
-import json
-from pathlib import Path
-
-xcom_path = Path("/airflow/xcom/return.json")
-xcom_path.parent.mkdir(parents=True, exist_ok=True)
-
-payload = {
-    "metrics_hdfs_path": f"/ml/results/gradient_inversion/{run_id}/metrics.json",
-    "images_hdfs_dir": f"/ml/results/gradient_inversion/{run_id}/artifacts",
-    "report_id": "gradient_inversion_2026-01-27"
-}
-
-with open(xcom_path, "w") as f:
-    json.dump(payload, f)
-
-print(f"XCOM_RESULT={payload}")
