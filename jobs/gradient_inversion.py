@@ -11,7 +11,12 @@ import matplotlib.pyplot as plt
 from skimage.metrics import structural_similarity as ssim
 from sklearn.metrics.pairwise import cosine_similarity
 
-def run():
+@dataclass
+class TestContext:
+    model: Any | None
+    metadata: Dict[str, Any]
+
+def run(ctx: TestContext):
     # ===== Step 1: Prepare MNIST dataset =====
     transform = transforms.Compose([transforms.ToTensor()])
     trainset = datasets.MNIST(root='./data', train=True, download=True, transform=transform)

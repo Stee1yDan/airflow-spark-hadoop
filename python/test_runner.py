@@ -41,37 +41,54 @@ if len(sys.argv) < 2:
     logger.error("No script name provided. Usage: test_runner.py <script_name.py>")
     sys.exit(1)
 
-script_name = sys.argv[1]
 logger.info("Starting test runner")
+
+script_name = sys.argv[1]
 logger.info("Requested test script: %s", script_name)
+
+model_name = sys.argv[2]
+logger.info("Requested model: %s", model_name)
 
 # -------------------------------------------------------------------
 # HDFS download
 # -------------------------------------------------------------------
 hdfs_url = "http://namenode:9870"
-hdfs_path = f"/ml/scripts/{script_name}"
-local_path = Path("/tmp/test.py")
+hdfs_script_path = f"/ml/scripts/{script_name}"
+hdfs_model_path = f"/ml/models/{model_name}"
+local_script_path = Path("/tmp/test.py")
 
 logger.info("Connecting to HDFS: %s", hdfs_url)
 client = InsecureClient(hdfs_url, user="hdfs")
 
-logger.info("Downloading script from HDFS: %s → %s", hdfs_path, local_path)
-client.download(hdfs_path, str(local_path), overwrite=True)
+logger.info("Downloading script from HDFS: %s → %s", hdfs_script_path, local_script_path)
+client.download(hdfs_script_path, str(local_script_path), overwrite=True)
 
-if not local_path.exists():
-    logger.error("Downloaded script not found at %s", local_path)
+if not local_script_path.exists():
+    logger.error("Downloaded script not found at %s", local_script_path)
     sys.exit(1)
 
-logger.info("Script downloaded successfully (%d bytes)", local_path.stat().st_size)
+logger.info("Script downloaded successfully (%d bytes)", local_script_path.stat().st_size)
+
+#---
+
+logger.info("Downloading model from HDFS: %s → %s", hdfs_model_path, local_script_path)
+client.download(hdfs_model_path, str(local_script_path), overwrite=True)
+
+if not local_script_path.exists():
+    logger.error("Downloaded model not found at %s", local_script_path)
+    sys.exit(1)
+
+logger.info("Model downloaded successfully (%d bytes)", local_script_path.stat().st_size)
+
 
 # -------------------------------------------------------------------
 # Dynamic import
 # -------------------------------------------------------------------
 logger.info("Loading test module dynamically")
 
-spec = importlib.util.spec_from_file_location("user_test", local_path)
+spec = importlib.util.spec_from_file_location("user_test", local_script_path)
 if spec is None or spec.loader is None:
-    logger.error("Failed to create import spec for %s", local_path)
+    logger.error("Failed to create import spec for %s", local_script_path)
     sys.exit(1)
 
 test_module = importlib.util.module_from_spec(spec)
@@ -91,6 +108,9 @@ logger.info("run() function found, executing test")
 # -------------------------------------------------------------------
 # Execute test
 # -------------------------------------------------------------------
+
+ctx = TestContext(model=)
+
 try:
     result = test_module.run()
     logger.info("Test execution completed successfully")

@@ -52,7 +52,6 @@ logger.info("Connecting to HDFS: %s", hdfs_url)
 client = InsecureClient(hdfs_url, user="hdfs")
 
 
-
 # -------------------------------------------------------------------
 # Download and parse metrics
 # -------------------------------------------------------------------

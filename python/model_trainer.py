@@ -40,32 +40,53 @@ logger.info("Artifacts dir: %s", models_dir)
 # -------------------------------------------------------------------
 # Input validation
 # -------------------------------------------------------------------
-if len(sys.argv) < 2:
+if len(sys.argv) < 1:
     logger.error("No script name provided. Usage: test_runner.py <script_name.py>")
     sys.exit(1)
 
-script_name = sys.argv[1]
 logger.info("Starting test runner")
+
+script_name = sys.argv[1]
 logger.info("Requested test script: %s", script_name)
+
 
 # -------------------------------------------------------------------
 # HDFS download
 # -------------------------------------------------------------------
 hdfs_url = "http://namenode:9870"
-hdfs_path = f"/ml/scripts/{script_name}"
+hdfs_script_path = f"/ml/scripts/{script_name}"
 local_path = Path("/tmp/test.py")
 
 logger.info("Connecting to HDFS: %s", hdfs_url)
 client = InsecureClient(hdfs_url, user="hdfs")
 
-logger.info("Downloading script from HDFS: %s → %s", hdfs_path, local_path)
-client.download(hdfs_path, str(local_path), overwrite=True)
+logger.info("Downloading script from HDFS: %s → %s", hdfs_script_path, local_path)
+client.download(hdfs_script_path, str(local_path), overwrite=True)
 
 if not local_path.exists():
     logger.error("Downloaded script not found at %s", local_path)
     sys.exit(1)
 
 logger.info("Script downloaded successfully (%d bytes)", local_path.stat().st_size)
+
+# -------------------------------------------------------------------
+# HDFS model download
+# -------------------------------------------------------------------
+hdfs_modrl_path = f"/ml/models/{script_name}"
+local_path = Path("/tmp/test.py")
+
+logger.info("Connecting to HDFS: %s", hdfs_url)
+client = InsecureClient(hdfs_url, user="hdfs")
+
+logger.info("Downloading script from HDFS: %s → %s", hdfs_script_path, local_path)
+client.download(hdfs_script_path, str(local_path), overwrite=True)
+
+if not local_path.exists():
+    logger.error("Downloaded script not found at %s", local_path)
+    sys.exit(1)
+
+logger.info("Script downloaded successfully (%d bytes)", local_path.stat().st_size)
+
 
 # -------------------------------------------------------------------
 # Dynamic import
@@ -118,7 +139,7 @@ logger.info("Model trainer finished")
 
 model = result.get("model")
 model_name = result.get("model_name")
-hdfs_model_path = f"/ml/models/{script_name}"
+hdfs_model_path = f"/ml/models/{script_name}/{str(model_name)}"
 
 if model is not None:
 
