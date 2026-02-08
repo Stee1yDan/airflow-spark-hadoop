@@ -24,15 +24,12 @@ class SimpleMLP(nn.Module):
 
 
 def train():
-    # ===== Step 1: Prepare MNIST dataset =====
     transform = transforms.Compose([transforms.ToTensor()])
     trainset = datasets.MNIST(root='./data', train=True, download=True, transform=transform)
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=1, shuffle=True)
 
-
     model = SimpleMLP()
 
-    # ===== Step 3: Simulate a real training step to get "true gradients" =====
     images, labels = next(iter(trainloader))
     criterion = nn.CrossEntropyLoss()
 
@@ -41,9 +38,12 @@ def train():
     loss = criterion(output, labels)
     loss.backward()
 
-    result = {
+    return {
         "model": model,
         "model_name": "SimpleMLP",
+        "manifest": {
+            "framework": "pytorch",
+            "architecture": "SimpleMLP",
+            "serialization": "state_dict"
+        }
     }
-
-    return result

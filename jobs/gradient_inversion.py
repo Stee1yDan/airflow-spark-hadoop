@@ -7,22 +7,24 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
 import matplotlib.pyplot as plt
+from typing import Any, Dict
+from pathlib import Path
 
 from skimage.metrics import structural_similarity as ssim
 from sklearn.metrics.pairwise import cosine_similarity
 
+from dataclasses import dataclass
+
 @dataclass
 class TestContext:
-    model: Any | None
+    model_name: Any | None
+    model_path: str | None
+    artifacts_dir: Path
     metadata: Dict[str, Any]
+    local_model_path: Path | None
+
 
 def run(ctx: TestContext):
-    # ===== Step 1: Prepare MNIST dataset =====
-    transform = transforms.Compose([transforms.ToTensor()])
-    trainset = datasets.MNIST(root='./data', train=True, download=True, transform=transform)
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=1, shuffle=True)
-
-    # ===== Step 2: Define a simple model =====
     class SimpleMLP(nn.Module):
         def __init__(self):
             super(SimpleMLP, self).__init__()
@@ -35,6 +37,15 @@ def run(ctx: TestContext):
             return self.fc2(x)
 
     model = SimpleMLP()
+    state = torch.load(ctx.local_model_path, map_location="cpu")
+    model.load_state_dict(state)
+    model.eval()
+
+    # ===== Step 1: Prepare MNIST dataset =====
+    transform = transforms.Compose([transforms.ToTensor()])
+    trainset = datasets.MNIST(root='./data', train=True, download=True, transform=transform)
+    trainloader = torch.utils.data.DataLoader(trainset, batch_size=1, shuffle=True)
+
 
     # ===== Step 3: Simulate a real training step to get "true gradients" =====
     images, labels = next(iter(trainloader))

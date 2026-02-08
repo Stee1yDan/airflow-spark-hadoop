@@ -139,7 +139,7 @@ logger.info("Model trainer finished")
 
 model = result.get("model")
 model_name = result.get("model_name")
-hdfs_model_path = f"/ml/models/{script_name}/{str(model_name)}"
+hdfs_model_path = f"/ml/models/{script_name[:-3]}/{str(model_name)}"
 
 if model is not None:
 

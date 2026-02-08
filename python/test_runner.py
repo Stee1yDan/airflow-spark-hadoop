@@ -12,9 +12,12 @@ from PIL import Image
 
 @dataclass
 class TestContext:
-    model: Any | None
+    model_name: Any | None
+    model_path: str | None
     artifacts_dir: Path
     metadata: Dict[str, Any]
+    local_model_path: Path | None
+
 
 # -------------------------------------------------------------------
 # Logging configuration (stdout → Airflow logs)
@@ -46,15 +49,11 @@ logger.info("Starting test runner")
 script_name = sys.argv[1]
 logger.info("Requested test script: %s", script_name)
 
-model_name = sys.argv[2]
-logger.info("Requested model: %s", model_name)
-
 # -------------------------------------------------------------------
 # HDFS download
 # -------------------------------------------------------------------
 hdfs_url = "http://namenode:9870"
 hdfs_script_path = f"/ml/scripts/{script_name}"
-hdfs_model_path = f"/ml/models/{model_name}"
 local_script_path = Path("/tmp/test.py")
 
 logger.info("Connecting to HDFS: %s", hdfs_url)
@@ -69,16 +68,27 @@ if not local_script_path.exists():
 
 logger.info("Script downloaded successfully (%d bytes)", local_script_path.stat().st_size)
 
-#---
+# -------------------------------------------------------------------
+# Download model from HDFS
+# -------------------------------------------------------------------
 
-logger.info("Downloading model from HDFS: %s → %s", hdfs_model_path, local_script_path)
-client.download(hdfs_model_path, str(local_script_path), overwrite=True)
-
-if not local_script_path.exists():
-    logger.error("Downloaded model not found at %s", local_script_path)
+if len(sys.argv) < 3:
+    logger.error("No model name provided. Usage: test_runner.py <script.py> <model_file>")
     sys.exit(1)
 
-logger.info("Model downloaded successfully (%d bytes)", local_script_path.stat().st_size)
+model_name = sys.argv[2]
+hdfs_model_path = f"/ml/models/{model_name}"
+local_model_path = Path("/tmp/model.pt")
+
+logger.info("Downloading model from HDFS: %s → %s", hdfs_model_path, local_model_path)
+
+client.download(hdfs_model_path, str(local_model_path), overwrite=True)
+
+if not local_model_path.exists():
+    logger.error("Downloaded model not found at %s", local_model_path)
+    sys.exit(1)
+
+logger.info("Model downloaded successfully (%d bytes)", local_model_path.stat().st_size)
 
 
 # -------------------------------------------------------------------
@@ -106,13 +116,27 @@ if not hasattr(test_module, "run"):
 logger.info("run() function found, executing test")
 
 # -------------------------------------------------------------------
+# Make context
+# -------------------------------------------------------------------
+
+try:
+    ctx = TestContext(model_name = model_name,
+                      model_path=hdfs_model_path,
+                      artifacts_dir=artifacts_dir,
+                      local_model_path = local_model_path,
+                      metadata={
+                          "script": script_name,
+                      },
+    )
+except Exception as e:
+    logger.exception("Test execution failed")
+
+# -------------------------------------------------------------------
 # Execute test
 # -------------------------------------------------------------------
 
-ctx = TestContext(model=)
-
 try:
-    result = test_module.run()
+    result = test_module.run(ctx)
     logger.info("Test execution completed successfully")
 except Exception as e:
     logger.exception("Test execution failed")
