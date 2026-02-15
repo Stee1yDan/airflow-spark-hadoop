@@ -90,6 +90,48 @@ if not local_model_path.exists():
 
 logger.info("Model downloaded successfully (%d bytes)", local_model_path.stat().st_size)
 
+# -------------------------------------------------------------------
+# Download artifacts
+# -------------------------------------------------------------------
+
+if len(sys.argv) < 4:
+    logger.error(
+        "No artifact directory provided. "
+        "Usage: test_runner.py <script.py> <model_file> <artifact_dir>"
+    )
+    sys.exit(1)
+
+artifact_dir_name = sys.argv[3]
+hdfs_artifact_path = f"/ml/models/{artifact_dir_name}"
+
+logger.info(
+    "Downloading artifacts from HDFS: %s → %s",
+    hdfs_artifact_path,
+    artifacts_dir,
+)
+
+# Ensure clean destination
+if artifacts_dir.exists():
+    logger.warning("The temp directory is already initialized")
+artifacts_dir.mkdir(parents=True, exist_ok=True)
+
+client.download(
+    hdfs_artifact_path,
+    str(artifacts_dir),
+    overwrite=True,
+)
+
+# Validate download
+if not artifacts_dir.exists() or not any(artifacts_dir.iterdir()):
+    logger.error("Downloaded artifacts directory is empty: %s", artifacts_dir)
+    sys.exit(1)
+
+logger.info("Artifacts downloaded successfully")
+
+for p in artifacts_dir.rglob("*"):
+    logger.debug("Downloaded artifact: %s", p)
+
+
 
 # -------------------------------------------------------------------
 # Dynamic import

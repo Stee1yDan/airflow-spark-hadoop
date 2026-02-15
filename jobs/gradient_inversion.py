@@ -57,53 +57,69 @@ def run(ctx: TestContext):
     loss.backward()
 
     # Save the true gradients (as if they were sent to a server in FL)
-    original_grads = [p.grad.clone() for p in model.parameters()]
+    original_grads = torch.load(ctx.artifacts_dir / "artifacts/gradient.pt", map_location="cpu")
 
     # ===== Step 4: Attack: reconstruct the image from gradients =====
-    dummy_data = torch.randn_like(images, requires_grad=True)
-    dummy_label = torch.randn((1, 10), requires_grad=True)
+    cos_sim = 0
+    cos_sim_score = 1
 
-    optimizer = optim.LBFGS([dummy_data, dummy_label], lr=1)
+    while cos_sim < cos_sim_score:
+        dummy_data = torch.randn_like(images, requires_grad=True)
+        dummy_label = torch.randn((1, 10), requires_grad=True)
 
-    history = []
-    for i in range(250):
-        def closure():
-            optimizer.zero_grad()
-            pred = model(dummy_data)
-            dummy_loss = F.cross_entropy(pred, dummy_label.softmax(dim=-1))
-            grads = torch.autograd.grad(dummy_loss, model.parameters(), create_graph=True)
+        optimizer = optim.LBFGS([dummy_data, dummy_label], lr=1)
 
-            grad_diff = 0
-            for g1, g2 in zip(grads, original_grads):
-                grad_diff += ((g1 - g2) ** 2).sum()
+        history = []
+        for i in range(250):
+            def closure():
+                optimizer.zero_grad()
+                pred = model(dummy_data)
+                dummy_loss = F.cross_entropy(pred, dummy_label.softmax(dim=-1))
+                grads = torch.autograd.grad(dummy_loss, model.parameters(), create_graph=True)
 
-            grad_diff.backward()
-            return grad_diff
+                grad_diff = 0
+                for g1, g2 in zip(grads, original_grads):
+                    grad_diff += ((g1 - g2) ** 2).sum()
 
-        optimizer.step(closure)
+                grad_diff.backward()
+                return grad_diff
 
-        if i % 50 == 0:
-            history.append(dummy_data.detach().clone())
+            optimizer.step(closure)
 
-    # ===== Step 5: Metrics =====
+            if i % 50 == 0:
+                history.append(dummy_data.detach().clone())
 
-    orig = images.detach().cpu().numpy()[0, 0]
-    recon = dummy_data.detach().cpu().numpy()[0, 0]
+        # ===== Step 5: Metrics =====
 
-    mse = float(np.mean((orig - recon) ** 2))
-    cos_sim = float(
-        cosine_similarity(orig.reshape(1, -1), recon.reshape(1, -1))[0][0]
-    )
-    ssim_score = ssim(
-        orig,
-        recon,
-        data_range=orig.max() - recon.min()
-    )
+        all_images = torch.stack([img for img, lbl in trainset])  # shape: [N, 1, 28, 28]
+        all_images_flat = all_images.view(all_images.size(0), -1)  # [N, 784]
 
-    attribute_accuracy = int(torch.argmax(model(dummy_data)).item() == labels.item())
+        recon_flat = dummy_data.detach().cpu().view(-1)  # [784]
 
-    orig_np = np.array(orig, dtype=np.float32)
-    recon_np = np.array(recon, dtype=np.float32)
+        mse_distances = torch.mean((all_images_flat - recon_flat) ** 2, dim=1)  # [N]
+        closest_idx = torch.argmin(mse_distances)
+        orig = all_images[closest_idx, 0].cpu().numpy()  # single 28x28 image
+
+        recon = dummy_data.detach().cpu().numpy()[0, 0]
+        recon = np.nan_to_num(recon, nan=0.0)
+        orig = np.nan_to_num(orig, nan=0.0)
+
+        mse = float(np.mean((orig - recon) ** 2))
+        cos_sim = float(
+            cosine_similarity(orig.reshape(1, -1), recon.reshape(1, -1))[0][0]
+        )
+        ssim_score = ssim(
+            orig,
+            recon,
+            data_range=orig.max() - recon.min()
+        )
+
+        attribute_accuracy = int(torch.argmax(model(dummy_data)).item() == labels.item())
+
+        orig_np = np.array(orig, dtype=np.float32)
+        recon_np = np.array(recon, dtype=np.float32)
+
+        cos_sim_score -= 0.05
 
 
     metrics = {

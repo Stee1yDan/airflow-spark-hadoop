@@ -160,9 +160,30 @@ else:
 
 
 # -------------------------
+# Save artifacts (images)
+# -------------------------
+
+artifacts = result.get("artifacts")
+hdfs_model_path = f"/ml/models/{script_name[:-3]}/{str(model_name)}"
+
+if artifacts is not None:
+    for key, value in artifacts.items():
+        local_artifact_path = models_dir / f"{key}.pt"
+        hdfs_artifact_path = f"{hdfs_model_path}/artifacts/{str(key)}.pt"
+
+        torch.save(value, local_artifact_path)
+
+        client.upload(
+            hdfs_artifact_path,
+            str(local_artifact_path),
+            overwrite=True,
+        )
+
+    logger.info("Artifacts successfully saved to HDFS")
+else:
+    logger.warning("No artifacts returned, skipping artifacts save")
+
+# -------------------------
 # Save metrics
 # -------------------------
 
-# -------------------------
-# Save artifacts (images)
-# -------------------------
