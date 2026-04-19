@@ -176,7 +176,6 @@ except Exception as e:
 # -------------------------------------------------------------------
 # Execute test
 # -------------------------------------------------------------------
-
 try:
     result = test_module.run(ctx)
     logger.info("Test execution completed successfully")
@@ -192,19 +191,17 @@ if result is None:
 else:
     logger.info("Test returned result of type: %s", type(result))
     logger.debug("Test result content: %s", result)
-
-logger.info("Test runner finished")
+    logger.info("Test runner finished")
 
 # -------------------------
 # Handling the result
 # -------------------------
-
 import json
 from datetime import datetime
+import matplotlib.pyplot as plt  # Added for matplotlib.pyplot figure support
 
 run_id = datetime.utcnow().isoformat().replace(":", "-")
 hdfs_base = f"/ml/results/{script_name.replace('.py', '')}/{run_id}"
-
 logger.info("Saving results to HDFS: %s", hdfs_base)
 
 # Ensure directories
@@ -214,7 +211,6 @@ client.makedirs(f"{hdfs_base}/artifacts")
 # Save metrics
 # -------------------------
 metrics_path = artifacts_dir / "metrics.json"
-
 with metrics_path.open("w") as f:
     json.dump(result.get("metrics", {}), f, indent=2)
 
@@ -223,27 +219,22 @@ client.upload(
     str(metrics_path),
     overwrite=True,
 )
-
 logger.info("Metrics saved to HDFS")
 
 # -------------------------
 # Save artifacts (images)
 # -------------------------
 for name, image in result.get("artifacts", {}).items():
-
     hdfs_target = f"{hdfs_base}/artifacts/{name}.png"
     img_local_path = Path(f"/tmp/{name}.png")
 
-    if not isinstance(image, np.ndarray):
-        logger.warning("Artifact '%s' is not a numpy array, skipping.", name)
-        continue
-
-    if np.isnan(image).any():
-        logger.warning("NaNs found in original or reconstructed images; replacing with 0")
-        image = np.nan_to_num(image, nan=0.0)
+    saved = False
 
     if isinstance(image, np.ndarray):
-        img_local_path = Path(f"/tmp/{name}.png")
+        # Original numpy array handling (unchanged behavior)
+        if np.isnan(image).any():
+            logger.warning("NaNs found in original or reconstructed images; replacing with 0")
+            image = np.nan_to_num(image, nan=0.0)
 
         # Normalize to 0-255 dynamically
         min_val, max_val = image.min(), image.max()
@@ -254,15 +245,35 @@ for name, image in result.get("artifacts", {}).items():
 
         im = Image.fromarray(image_uint8)
         im.save(img_local_path)
+        saved = True
 
+    elif isinstance(image, plt.Figure):
+        # NEW: Handle matplotlib.pyplot figures (e.g. fig = plt.figure(), plt.gcf(), etc.)
+        # Renders the plot exactly as it would appear, including labels, titles, legends, etc.
+        image.savefig(
+            str(img_local_path),
+            bbox_inches="tight",   # Prevents cutting off labels/legends
+            dpi=150                # Good balance of quality vs file size (adjust if needed)
+        )
+        plt.close(image)  # Free memory - important when running many tests
+        saved = True
+        logger.debug("Saved matplotlib figure '%s' as PNG", name)
 
-    client.upload(
-        hdfs_target,
-        str(img_local_path),
-        overwrite=True,
-    )
+    else:
+        logger.warning(
+            "Artifact '%s' is not a numpy array or matplotlib figure (got %s), skipping.",
+            name,
+            type(image)
+        )
+        continue
 
-    logger.info("Uploaded artifact: %s", hdfs_target)
+    if saved:
+        client.upload(
+            hdfs_target,
+            str(img_local_path),
+            overwrite=True,
+        )
+        logger.info("Uploaded artifact: %s", hdfs_target)
 
 # -------------------------
 # Sharing image

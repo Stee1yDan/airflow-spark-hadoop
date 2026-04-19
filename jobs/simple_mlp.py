@@ -40,6 +40,8 @@ def train():
 
     grads = [p.grad.detach().clone() for p in model.parameters()]
 
+    orig_np = np.array(images.detach().cpu().numpy()[0, 0], dtype=np.float32)
+
     return {
         "model": model,
         "model_name": "SimpleMLP",
@@ -49,6 +51,7 @@ def train():
             "serialization_type": "state_dict"
         },
         "artifacts": {
-            "gradient": grads
+            "gradient.pt": grads,
+            "original_image.npy": orig_np
         }
     }

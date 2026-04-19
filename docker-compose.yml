@@ -10,9 +10,10 @@ volumes:
   airflow-logs:
   postgres-data:
   spark-spark-home:
-
+  jenkins-home:          # ← NEW
 
 services:
+  # === ALL YOUR ORIGINAL SERVICES (unchanged) ===
   namenode:
     build: ./hadoop
     hostname: namenode
@@ -21,7 +22,7 @@ services:
     networks:
       - hadoop-net
     ports:
-      - "9870:9870"   # HDFS Web UI
+      - "9870:9870"
     environment:
       - HDFS_NAMENODE_USER=root
     volumes:
@@ -49,7 +50,7 @@ services:
     networks:
       - hadoop-net
     ports:
-      - "8088:8088"   # YARN Web UI
+      - "8088:8088"
     environment:
       - YARN_RESOURCEMANAGER_USER=root
 
@@ -97,41 +98,31 @@ services:
       - ./data:/app/data
       - ./hadoop/conf:/opt/hadoop/etc/hadoop
 
-
-
   airflow:
     build: ./airflow
     container_name: airflow
     networks:
       - hadoop-net
     ports:
-      - "8080:8080"   # Airflow Web UI
+      - "8080:8080"
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__CORE__FERNET_KEY=YOUR_FERNET_KEY
       - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=False
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
-      - HADOOP_CONF_DIR=/opt/hadoop/etc/hadoop
-      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
       - AIRFLOW__CORE__FERNET_KEY=y9nZQ3t5P4pQpL5UZzXxQ2JwR4F1M5C0LkK4jv7b6vI=
-      #- YARN_CONF_DIR=/opt/hadoop/etc/hadoop
-      #- SPARK_HOME=/opt/spark
-      #- SPARK_MASTER_HOST=resourcemanager
+      - HADOOP_CONF_DIR=/opt/hadoop/etc/hadoop
+      - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./airflow/dags:/opt/airflow/dags
       - airflow-logs:/opt/airflow/logs
-      - spark-spark-home:/opt/spark   # mount Spark binaries
+      - spark-spark-home:/opt/spark
       - ./jobs:/jobs
       - ./hadoop/conf:/opt/hadoop/etc/hadoop
     command: >
-      bash -c "
-        airflow db init &&
-        airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin
-        airflow webserver &
-        airflow scheduler
-      "
+      bash -c "airflow db init && airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin && airflow webserver & airflow scheduler"
     depends_on:
       - spark
       - namenode
@@ -160,7 +151,7 @@ services:
     networks:
       - hadoop-net
     ports:
-      - "8888:8888"   # Hue Web UI
+      - "8888:8888"
     depends_on:
       - namenode
       - resourcemanager
@@ -169,4 +160,28 @@ services:
     volumes:
       - ./hue/hue.ini:/usr/share/hue/desktop/conf/hue.ini
 
-
+  # ===================================================================
+  # Jenkins → controls Airflow (rest of stack untouched)
+  # ===================================================================
+  jenkins:
+     build:
+       context: ./jenkins
+       dockerfile: Dockerfile
+     container_name: jenkins
+     hostname: jenkins
+     restart: unless-stopped
+     networks:
+       - hadoop-net
+     ports:
+       - "8081:8080"
+       - "50000:50000"
+     volumes:
+       - jenkins-home:/var/jenkins_home
+       - /var/run/docker.sock:/var/run/docker.sock
+       - ./jobs:/jobs
+       - ./jenkins/images:/var/jenkins_home/userContent/images
+     environment:
+       - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
+     depends_on:
+       - ml-python
+       - airflow

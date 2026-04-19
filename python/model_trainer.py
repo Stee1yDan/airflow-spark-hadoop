@@ -49,6 +49,9 @@ logger.info("Starting test runner")
 script_name = sys.argv[1]
 logger.info("Requested test script: %s", script_name)
 
+model_name = sys.argv[2]
+logger.info("Requested test script: %s", script_name)
+
 
 # -------------------------------------------------------------------
 # HDFS download
@@ -138,13 +141,13 @@ logger.info("Model trainer finished")
 # -------------------------
 
 model = result.get("model")
-model_name = result.get("model_name")
-hdfs_model_path = f"/ml/models/{script_name[:-3]}/{str(model_name)}"
+# model_name = result.get("model_name")
+hdfs_model_dir = f"/ml/models/{script_name[:-3]}/{str(model_name)}"
 
 if model is not None:
 
     local_model_path = models_dir / "model.pt"
-    hdfs_model_path = f"{hdfs_model_path}/{str(model_name)}.pt"
+    hdfs_model_path = f"{hdfs_model_dir}/{str(model_name)}.pt"
 
     torch.save(model.state_dict(), local_model_path)
 
@@ -160,26 +163,40 @@ else:
 
 
 # -------------------------
-# Save artifacts (images)
+# Save artifacts
 # -------------------------
-
 artifacts = result.get("artifacts")
-hdfs_model_path = f"/ml/models/{script_name[:-3]}/{str(model_name)}"
-
-if artifacts is not None:
+if artifacts:
     for key, value in artifacts.items():
-        local_artifact_path = models_dir / f"{key}.pt"
-        hdfs_artifact_path = f"{hdfs_model_path}/artifacts/{str(key)}.pt"
+        # Автоматически добавляем расширение, если его нет
+        if not any(ext in key.lower() for ext in ['.pt', '.npy', '.pth']):
+            if isinstance(value, (list, tuple)) and len(value) > 0 and isinstance(value[0], torch.Tensor):
+                key = f"{key}.pt"
+            elif isinstance(value, torch.Tensor):
+                key = f"{key}.pt"
+            elif isinstance(value, np.ndarray):
+                key = f"{key}.npy"
 
-        torch.save(value, local_artifact_path)
+        local_artifact_path = models_dir / key
+        hdfs_artifact_path = f"{hdfs_model_dir}/artifacts/{key}"
+
+        # Сохраняем в зависимости от типа
+        if isinstance(value, (list, tuple)) and len(value) > 0 and isinstance(value[0], torch.Tensor):
+            torch.save(value, local_artifact_path)          # list of tensors
+        elif isinstance(value, torch.Tensor):
+            torch.save(value, local_artifact_path)
+        elif isinstance(value, np.ndarray):
+            np.save(local_artifact_path, value)
+        else:
+            logger.warning(f"Неизвестный тип артефакта {key}: {type(value)}. Пропускаем.")
+            continue
 
         client.upload(
             hdfs_artifact_path,
             str(local_artifact_path),
             overwrite=True,
         )
-
-    logger.info("Artifacts successfully saved to HDFS")
+        logger.info(f"Artifact '{key}' successfully saved to HDFS")
 else:
     logger.warning("No artifacts returned, skipping artifacts save")
 
